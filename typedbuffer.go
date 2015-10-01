@@ -1,9 +1,3 @@
-package typedbuffer
-
-import (
-	"errors"
-)
-
 /**
  * A set of utility methods that encodes the type of an object and the object value
  * in a byte slice. For small values the object value is encoded with the type.
@@ -81,6 +75,11 @@ import (
  *   ...
  *   byte 98 [8 bytes] Unsigned long from bytes
  */
+package typedbuffer
+
+import (
+	"errors"
+)
 
 const (
 	/** All positive values have this bit set */
