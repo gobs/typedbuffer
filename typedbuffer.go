@@ -17,9 +17,13 @@
  *
  * Supported types:
  *
+ * Nil
+ *   byte 00 - nil first (nil comes before any other value)
+ *   byte FF - nil last (nil comes after any other value)
+ *
  * Boolean:
- *   byte 00 - bool false
- *   byte 01 - bool true
+ *   byte 0E - bool false
+ *   byte 0F - bool true
  *
  * Bytes:
  *   byte 10+size     : 0 to 15 bytes
@@ -37,32 +41,23 @@
  *   byte D4+size [n bytes] - Date as compacted long from 1/1/2015
  *   byte 54+size [n bytes] - Date as compacted long before 1/1/2015
  *
- * Double:
- *   byte E7 - Double.NaN
- *   byte E6 - Double.POSITIVE_INFINITY
- *   byte E5 + bytes[8] - Double from bytes (positive value)
- *   byte E4 - Double +0.0
- *   byte 66 - Double -0.0
- *   byte 65 + bytes[8] - Double from bytes (negative value)
- *   byte 64 - Double.NEGATIVE_INFINITY
- *
  * Long:
- *   byte F0 - Long 0L
- *   byte F1 - Long 1L
+ *   byte E0 - Long 0L
+ *   byte E1 - Long 1L
  *   ...
- *   byte F7 - Long 7L
- *   byte F8 [1 byte]  Long 8L to 255L
- *   byte F9 [2 bytes] Long 256L to 65535L
+ *   byte E7 - Long 7L
+ *   byte E8 [1 byte]  Long 8L to 255L
+ *   byte E9 [2 bytes] Long 256L to 65535L
  *   ...
- *   byte FF [8 bytes] Long from bytes
- *   byte 7F - Long -1L
- *   byte 7E - Long -2L
+ *   byte EF [8 bytes] Long from bytes
+ *   byte 6F - Long -1L
+ *   byte 6E - Long -2L
  *   ...
- *   byte 78 - Long -8L
- *   byte 77 [1 byte] - Long -9L to -256
- *   byte 76 [2 bytes] - Long -256 to -65536L
+ *   byte 68 - Long -8L
+ *   byte 67 [1 byte] - Long -9L to -256
+ *   byte 66 [2 bytes] - Long -256 to -65536L
  *   ...
- *   byte 70 [8 bytes] - Long from bytes (negative value)
+ *   byte 60 [8 bytes] - Long from bytes (negative value)
  *
  * Unsigned Long:
  *   byte 80 - Unsigned long 0
@@ -74,11 +69,25 @@
  *   byte 92 [2 bytes] 256 to 65535
  *   ...
  *   byte 98 [8 bytes] Unsigned long from bytes
+ *
+ * Double:
+ *   byte F7 - Double.NaN
+ *   byte F6 - Double.POSITIVE_INFINITY
+ *   byte F5 + bytes[8] - Double from bytes (positive value)
+ *   byte F4 - Double +0.0
+ *   byte 76 - Double -0.0
+ *   byte 75 + bytes[8] - Double from bytes (negative value)
+ *   byte 74 - Double.NEGATIVE_INFINITY
+ *
  */
 package typedbuffer
 
 import (
 	"errors"
+)
+
+var (
+	NilSortFirst = true
 )
 
 const (
@@ -88,8 +97,12 @@ const (
 
 	BB_TYPE_MASK byte = 0xF0 // this is actually type + cardinality
 
+	/** Nil values */
+	BB_NIL_FIRST = 0x00
+	BB_NIL_LAST  = 0xFF
+
 	/** Boolean values */
-	BB_BOOLEAN       = 0x00
+	BB_BOOLEAN       = 0x0E
 	BB_BOOLEAN_FALSE = BB_BOOLEAN | 0
 	BB_BOOLEAN_TRUE  = BB_BOOLEAN | 1
 
@@ -107,18 +120,8 @@ const (
 	BB_POSITIVE_DATE = BB_COMPACT_DATE | BB_POSITIVE
 	BB_NEGATIVE_DATE = BB_COMPACT_DATE | BB_NEGATIVE
 
-	/** Double values */
-	BB_DOUBLE                   = 0x60
-	BB_DOUBLE_NAN               = (BB_DOUBLE | BB_POSITIVE) + 0x03
-	BB_DOUBLE_POSITIVE_INFINITY = (BB_DOUBLE | BB_POSITIVE) + 0x02
-	BB_DOUBLE_POSITIVE_ZERO     = (BB_DOUBLE | BB_POSITIVE) + 0x00
-	BB_DOUBLE_POSITIVE_VALUE    = (BB_DOUBLE | BB_POSITIVE) + 0x01
-	BB_DOUBLE_NEGATIVE_ZERO     = (BB_DOUBLE | BB_NEGATIVE) + 0x02
-	BB_DOUBLE_NEGATIVE_VALUE    = (BB_DOUBLE | BB_NEGATIVE) + 0x01
-	BB_DOUBLE_NEGATIVE_INFINITY = (BB_DOUBLE | BB_NEGATIVE) + 0x00
-
 	/** Integer values */
-	BB_INT                = 0x70
+	BB_INT                = 0x60
 	BB_INT_POSITIVE_VALUE = BB_INT | BB_POSITIVE | 0x08
 	BB_INT_NEGATIVE_VALUE = BB_INT | BB_NEGATIVE
 	BB_SMALL_POSITIVE     = BB_INT | BB_POSITIVE
@@ -137,6 +140,16 @@ const (
 	MIN_SMALL_NEGATIVE = BB_SMALL_NEGATIVE | (SMALL_NEGATIVE_INT & SMALL_INT_MASK)
 	MAX_SMALL_NEGATIVE = BB_SMALL_NEGATIVE | (-1 & SMALL_INT_MASK)
 
+	/** Double values */
+	BB_DOUBLE                   = 0x70
+	BB_DOUBLE_NAN               = (BB_DOUBLE | BB_POSITIVE) + 0x03
+	BB_DOUBLE_POSITIVE_INFINITY = (BB_DOUBLE | BB_POSITIVE) + 0x02
+	BB_DOUBLE_POSITIVE_ZERO     = (BB_DOUBLE | BB_POSITIVE) + 0x00
+	BB_DOUBLE_POSITIVE_VALUE    = (BB_DOUBLE | BB_POSITIVE) + 0x01
+	BB_DOUBLE_NEGATIVE_ZERO     = (BB_DOUBLE | BB_NEGATIVE) + 0x02
+	BB_DOUBLE_NEGATIVE_VALUE    = (BB_DOUBLE | BB_NEGATIVE) + 0x01
+	BB_DOUBLE_NEGATIVE_INFINITY = (BB_DOUBLE | BB_NEGATIVE) + 0x00
+
 	/** Unsigned values */
 	BB_UINT     = 0x80
 	BB_UINT_VAR = 0x90
@@ -151,6 +164,9 @@ const (
 )
 
 var (
+	NilFirst = []byte{BB_NIL_FIRST}
+	NilLast  = []byte{BB_NIL_LAST}
+
 	True  = []byte{BB_BOOLEAN_TRUE}
 	False = []byte{BB_BOOLEAN_FALSE}
 
@@ -173,6 +189,14 @@ func EncodeBool(b bool) []byte {
 		return True
 	} else {
 		return False
+	}
+}
+
+func EncodeNil() []byte {
+	if NilSortFirst {
+		return NilFirst
+	} else {
+		return NilLast
 	}
 }
 
@@ -316,6 +340,11 @@ func Encode(values ...interface{}) ([]byte, error) {
 	b := []byte{}
 
 	for _, v := range values {
+		if v == nil {
+			b = append(b, EncodeNil()...)
+			continue
+		}
+
 		switch t := v.(type) {
 		case bool:
 			b = append(b, EncodeBool(t)...)
@@ -357,6 +386,9 @@ func Decode(b []byte) (interface{}, []byte, error) {
 	next := b[1:]
 
 	switch {
+	case k == BB_NIL_FIRST || k == BB_NIL_LAST:
+		return nil, next, nil
+
 	case k == BB_BOOLEAN_FALSE:
 		return false, next, nil
 

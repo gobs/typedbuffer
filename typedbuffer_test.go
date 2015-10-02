@@ -175,3 +175,32 @@ func TestCompare(t *testing.T) {
 		}
 	}
 }
+
+func TestCompareNil(t *testing.T) {
+	tests := []CompareItem{
+		CompareItem{NilFirst, EncodeInt64(0)},
+		CompareItem{NilFirst, EncodeInt64(-1)},
+		CompareItem{NilFirst, EncodeInt64(1)},
+		CompareItem{NilFirst, EncodeBool(true)},
+		CompareItem{NilFirst, EncodeBool(false)},
+		CompareItem{EncodeInt64(0), NilLast},
+		CompareItem{EncodeInt64(-1), NilLast},
+		CompareItem{EncodeInt64(1), NilLast},
+		CompareItem{EncodeBool(true), NilLast},
+		CompareItem{EncodeBool(false), NilLast},
+
+		CompareItem{MustEncode(nil, 50, 1000000), MustEncode(0, nil, 1000000)},
+		CompareItem{MustEncode(nil, 50, 1000000), MustEncode(0, nil, 1000000)},
+
+		CompareItem{MustEncode(0, 50, nil), MustEncode(0, 50, 1)},
+		CompareItem{MustEncode(0, 1, 1), MustEncode(0, 50, nil)},
+	}
+
+	for _, tt := range tests {
+		t.Log(MustDecodeAll(tt.min), "<", MustDecodeAll(tt.max), "[", tt.min, "<", tt.max, "]")
+		if bytes.Compare(tt.min, tt.max) != -1 {
+			t.Log(tt.min, "should be less than", tt.max)
+			t.Fail()
+		}
+	}
+}
