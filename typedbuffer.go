@@ -358,7 +358,7 @@ func EncodeBytes(bb []byte) []byte {
 // (strings are encoded as []byte)
 //
 func Encode(values ...interface{}) ([]byte, error) {
-    return EncodeNils(true, values...)
+	return EncodeNils(true, values...)
 }
 
 func EncodeNils(nilFirst bool, values ...interface{}) ([]byte, error) {
@@ -505,13 +505,13 @@ func DecodeAll(strings bool, b []byte) ([]interface{}, error) {
 			return nil, err
 		}
 
-                if strings {
-                    if sb, ok := v.([]byte); ok {
-		        v = string(sb)
-                    }
-                } 
+		if strings {
+			if sb, ok := v.([]byte); ok {
+				v = string(sb)
+			}
+		}
 
-                res = append(res, v)
+		res = append(res, v)
 		b = next
 	}
 }
