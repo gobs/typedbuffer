@@ -180,6 +180,9 @@ var (
 	CorruptedBufferError = errors.New("corrupted buffer")
 )
 
+//
+// Encode boolean (true / false)
+//
 func EncodeBool(b bool) []byte {
 	if b {
 		return True
@@ -188,6 +191,9 @@ func EncodeBool(b bool) []byte {
 	}
 }
 
+//
+// Encode nil, depending on value of first
+//
 func EncodeNil(first bool) []byte {
 	if first {
 		return NilFirst
@@ -196,14 +202,23 @@ func EncodeNil(first bool) []byte {
 	}
 }
 
+//
+// Encode int value (as compacted int64)
+//
 func EncodeInt(i int) []byte {
 	return EncodeInt64(int64(i))
 }
 
+//
+// Encode uint value (as compacted uint64)
+//
 func EncodeUint(u uint) []byte {
 	return EncodeUint64(uint64(u))
 }
 
+//
+// Encoce int64 value
+//
 func EncodeInt64(i int64) []byte {
 	switch {
 	case i < SMALL_NEGATIVE_INT:
@@ -222,6 +237,9 @@ func EncodeInt64(i int64) []byte {
 	}
 }
 
+//
+// Encode uint64
+//
 func EncodeUint64(u uint64) []byte {
 	if u <= SMALL_UINT {
 		return []byte{BB_UINT + byte(u)}
@@ -302,6 +320,9 @@ func uncompactUint64(bb []byte) uint64 {
 	return l
 }
 
+//
+// Encode slice of bytes
+//
 func EncodeBytes(bb []byte) []byte {
 	l := len(bb)
 
@@ -332,6 +353,10 @@ func EncodeBytes(bb []byte) []byte {
 	}
 }
 
+//
+// Encode one or more values according to their type
+// (strings are encoded as []byte)
+//
 func Encode(values ...interface{}) ([]byte, error) {
     return EncodeNils(true, values...)
 }
@@ -377,6 +402,9 @@ func EncodeNils(nilFirst bool, values ...interface{}) ([]byte, error) {
 	return b, nil
 }
 
+//
+// Decode first value in typed buffer. Returns decoded value and remaining buffer
+//
 func Decode(b []byte) (interface{}, []byte, error) {
 	if len(b) == 0 {
 		return nil, nil, EmptyBufferError
@@ -460,6 +488,10 @@ func Decode(b []byte) (interface{}, []byte, error) {
 	}
 }
 
+//
+// Decode all values in a type buffer. Return an array of decoded values.
+// If strings is true, byte arrays are converterd to string
+//
 func DecodeAll(strings bool, b []byte) ([]interface{}, error) {
 	res := make([]interface{}, 0)
 
@@ -484,6 +516,9 @@ func DecodeAll(strings bool, b []byte) ([]interface{}, error) {
 	}
 }
 
+//
+// Decode all values in a typed buffer as an arrya of uint64 values.
+//
 func DecodeUintArray(b []byte) ([]uint64, error) {
 	res := []uint64{}
 
