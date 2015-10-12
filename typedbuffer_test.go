@@ -144,7 +144,7 @@ type CompareItem struct {
 }
 
 func MustDecodeAll(b []byte) []interface{} {
-	res, err := DecodeAll(b)
+	res, err := DecodeAll(true, b)
 	if err != nil {
 		panic("unexpected error")
 	}

@@ -86,10 +86,6 @@ import (
 	"errors"
 )
 
-var (
-	NilSortFirst = true
-)
-
 const (
 	/** All positive values have this bit set */
 	BB_POSITIVE byte = 0x80
@@ -192,8 +188,8 @@ func EncodeBool(b bool) []byte {
 	}
 }
 
-func EncodeNil() []byte {
-	if NilSortFirst {
+func EncodeNil(first bool) []byte {
+	if first {
 		return NilFirst
 	} else {
 		return NilLast
@@ -337,11 +333,15 @@ func EncodeBytes(bb []byte) []byte {
 }
 
 func Encode(values ...interface{}) ([]byte, error) {
+    return EncodeNils(true, values...)
+}
+
+func EncodeNils(nilFirst bool, values ...interface{}) ([]byte, error) {
 	b := []byte{}
 
 	for _, v := range values {
 		if v == nil {
-			b = append(b, EncodeNil()...)
+			b = append(b, EncodeNil(nilFirst)...)
 			continue
 		}
 
@@ -460,7 +460,7 @@ func Decode(b []byte) (interface{}, []byte, error) {
 	}
 }
 
-func DecodeAll(b []byte) ([]interface{}, error) {
+func DecodeAll(strings bool, b []byte) ([]interface{}, error) {
 	res := make([]interface{}, 0)
 
 	for {
@@ -473,7 +473,13 @@ func DecodeAll(b []byte) ([]interface{}, error) {
 			return nil, err
 		}
 
-		res = append(res, v)
+                if strings {
+                    if sb, ok := v.([]byte); ok {
+		        v = string(sb)
+                    }
+                } 
+
+                res = append(res, v)
 		b = next
 	}
 }
