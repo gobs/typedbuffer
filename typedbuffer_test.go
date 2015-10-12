@@ -139,6 +139,14 @@ func MustEncode(values ...interface{}) []byte {
 	return b
 }
 
+func MustEncodeNils(nilFirst bool, values ...interface{}) []byte {
+	b, err := EncodeNils(nilFirst, values...)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
 type CompareItem struct {
 	min, max []byte
 }
@@ -165,6 +173,9 @@ func TestCompare(t *testing.T) {
 
 		CompareItem{MustEncode(1, 50, 1000000), MustEncode(1, 300, 1)},
 		CompareItem{MustEncode(1, 50, 1000000, 1), MustEncode(1, 300, 1)},
+
+		CompareItem{MustEncodeNils(true, nil, 50, 1000000, 1), MustEncodeNils(true, 0, 50, 1000000, 1)},
+		CompareItem{MustEncodeNils(false, 9999999, 50, 1000000, 1), MustEncodeNils(false, nil, 50, 1000000, 1)},
 	}
 
 	for _, tt := range tests {
