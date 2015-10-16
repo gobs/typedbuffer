@@ -35,11 +35,11 @@
  *   byte 4F XXXXXXXX : 65851+XXXXXXXXXX bytes
  *
  * Date:
- *   byte 50 [8 bytes] - Date from bytes as long
+ *   byte 50+size [n bytes] - Date from bytes as unsigned long
  *
- * Compact Date (see Long) :
- *   byte D4+size [n bytes] - Date as compacted long from 1/1/2015
- *   byte 54+size [n bytes] - Date as compacted long before 1/1/2015
+ * Delta Date (see Long) :
+ *   byte D8+size [n bytes] - Date as delta after 1/1/2015 (long)
+ *   byte 58+size [n bytes] - Date as delta before 1/1/2015 (long)
  *
  * Long:
  *   byte E0 - Long 0L
@@ -84,6 +84,7 @@ package typedbuffer
 
 import (
 	"errors"
+	"time"
 )
 
 var (
@@ -116,9 +117,11 @@ const (
 	BB_DATE = 0x50
 
 	/** Compact date values */
-	BB_COMPACT_DATE  = 0x54
-	BB_POSITIVE_DATE = BB_COMPACT_DATE | BB_POSITIVE
-	BB_NEGATIVE_DATE = BB_COMPACT_DATE | BB_NEGATIVE
+	BB_DELTA_DATE    = 0x58
+	BB_POSITIVE_DATE = BB_DELTA_DATE | BB_POSITIVE
+	BB_NEGATIVE_DATE = BB_DELTA_DATE | BB_NEGATIVE
+
+	BB_DATE_MASK = 0xF8
 
 	/** Integer values */
 	BB_INT                = 0x60
@@ -182,6 +185,8 @@ var (
 	NoEncoding           = errors.New("no encoding")
 	EmptyBufferError     = errors.New("empty buffer")
 	CorruptedBufferError = errors.New("corrupted buffer")
+
+	DELTA_DATE = time.Date(2015, time.January, 1, 0, 0, 0, 0, time.UTC).Unix()
 )
 
 //
@@ -248,7 +253,7 @@ func EncodeUint64(u uint64) []byte {
 	if u <= SMALL_UINT {
 		return []byte{BB_UINT + byte(u)}
 	} else {
-		return compactUint64(u)
+		return compactUint64(u, BB_UINT_VAR)
 	}
 }
 
@@ -295,7 +300,7 @@ func uncompactInt64(bb []byte, positive bool) int64 {
 	return l
 }
 
-func compactUint64(u uint64) []byte {
+func compactUint64(u uint64, typ byte) []byte {
 	bb := make([]byte, 0, 8)
 	bits := 64 /* size of uint64 */ - 8
 
@@ -305,7 +310,7 @@ func compactUint64(u uint64) []byte {
 		}
 	}
 
-	bb = append(bb, byte(BB_UINT_VAR+byte(bits/8)+1))
+	bb = append(bb, byte(typ+byte(bits/8)+1))
 
 	for ; bits >= 0; bits -= 8 {
 		bb = append(bb, byte(u>>uint(bits)))
@@ -358,6 +363,22 @@ func EncodeBytes(bb []byte) []byte {
 }
 
 //
+// Encode Time
+//
+func EncodeTime(t time.Time) []byte {
+	i := t.Unix()
+	return compactUint64(uint64(i), BB_DATE)
+}
+
+//
+// Encode Time as delta from 2015-01-01
+//
+func EncodeTimeDelta(t time.Time) []byte {
+	i := t.Unix() - DELTA_DATE
+	return compactInt64(uint64(i), BB_DELTA_DATE)
+}
+
+//
 // Encode one or more values according to their type
 // (strings are encoded as []byte)
 //
@@ -393,6 +414,9 @@ func Encode(values ...interface{}) ([]byte, error) {
 
 		case string:
 			b = append(b, EncodeBytes([]byte(t))...)
+
+		case time.Time:
+			b = append(b, EncodeTime(t)...)
 
 		default:
 			return nil, NoEncoding
@@ -482,6 +506,33 @@ func Decode(b []byte) (interface{}, []byte, error) {
 			return nil, nil, CorruptedBufferError
 		}
 		return uncompactUint64(next[0:n]), next[n:], nil
+
+	case (k & BB_DATE_MASK) == BB_DATE:
+		n := int(k & 15)
+		if n == 0 || n > 8 || len(next) < n {
+			return nil, nil, CorruptedBufferError
+		}
+
+		t := uncompactUint64(next[0:n])
+		return time.Unix(int64(t), 0), next[n:], nil
+
+	case (k & BB_DATE_MASK) == BB_POSITIVE_DATE:
+		n := int(k & 7)
+		if len(next) < n {
+			return nil, nil, CorruptedBufferError
+		}
+
+		t := uncompactInt64(next[0:n], true)
+		return time.Unix(t+DELTA_DATE, 0), next[n:], nil
+
+	case (k & BB_DATE_MASK) == BB_NEGATIVE_DATE:
+		n := int(k & 7)
+		if len(next) < n {
+			return nil, nil, CorruptedBufferError
+		}
+
+		t := uncompactInt64(next[0:n], false)
+		return time.Unix(t+DELTA_DATE, 0), next[n:], nil
 
 	default:
 		return nil, nil, CorruptedBufferError
