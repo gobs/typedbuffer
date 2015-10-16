@@ -87,10 +87,6 @@ import (
 	"time"
 )
 
-var (
-	NilSortFirst = true
-)
-
 const (
 	/** All positive values have this bit set */
 	BB_POSITIVE byte = 0x80
@@ -201,10 +197,10 @@ func EncodeBool(b bool) []byte {
 }
 
 //
-// Encode nil, depending on value of NilSortFirst
+// Encode nil, depending on value of first
 //
-func EncodeNil() []byte {
-	if NilSortFirst {
+func EncodeNil(first bool) []byte {
+	if first {
 		return NilFirst
 	} else {
 		return NilLast
@@ -383,11 +379,15 @@ func EncodeTimeDelta(t time.Time) []byte {
 // (strings are encoded as []byte)
 //
 func Encode(values ...interface{}) ([]byte, error) {
+	return EncodeNils(true, values...)
+}
+
+func EncodeNils(nilFirst bool, values ...interface{}) ([]byte, error) {
 	b := []byte{}
 
 	for _, v := range values {
 		if v == nil {
-			b = append(b, EncodeNil()...)
+			b = append(b, EncodeNil(nilFirst)...)
 			continue
 		}
 
@@ -541,8 +541,9 @@ func Decode(b []byte) (interface{}, []byte, error) {
 
 //
 // Decode all values in a type buffer. Return an array of decoded values.
+// If strings is true, byte arrays are converterd to string
 //
-func DecodeAll(b []byte) ([]interface{}, error) {
+func DecodeAll(strings bool, b []byte) ([]interface{}, error) {
 	res := make([]interface{}, 0)
 
 	for {
@@ -553,6 +554,12 @@ func DecodeAll(b []byte) ([]interface{}, error) {
 
 		if err != nil {
 			return nil, err
+		}
+
+		if strings {
+			if sb, ok := v.([]byte); ok {
+				v = string(sb)
+			}
 		}
 
 		res = append(res, v)
